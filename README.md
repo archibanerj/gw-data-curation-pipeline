@@ -1,1 +1,2 @@
-Gravitational Wave Data Curation Pipeline
+# Gravitational Wave Data Curation Pipeline
+
