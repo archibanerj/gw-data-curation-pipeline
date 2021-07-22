@@ -30,6 +30,16 @@ signalLen = int(float(sys.argv[15]))
 noiseType = sys.argv[16]
 
 
+'''
+Issues:
+
+Add header row to catalogue
+Provide a way for generating Gaussian noise
+Update README.md with full instructions
+
+'''
+
+
 def generate(mass1, mass2, spin1, spin2, dist,
             signalDuration, noiseType,
             f_low = 25, dt = 1.0/4096):
