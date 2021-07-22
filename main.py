@@ -4,37 +4,70 @@ import random
 import matplotlib.pyplot as plt
 from pycbc.waveform import get_td_waveform
 
-#Importing core script
+# Importing core script
 import core
+
+'''
+cmd-line arguments: 
+
+fn - filename & path to original LIGO noise file
+file_time - starting time for the file
+
+n_sample - number of samples to be saved
+
+m_lower - lower bound of masses
+m_upper - upper bound of masses
+m_samples - sampling rate in the mass space
+
+
+dist_lower - lower bound of distances
+dist_upper - upper bound of distances
+dist_sample - sampling rate in the distance space
+
+dir_wav - link to saving the ground waveforms
+dir_detector_data - link to saving the detector data
+dir_catalogue - path for saving the catalogue of parameters
+dir_paramSpaceMass - path for saving the parameter space of masses
+dir_paramSpaceSpin - path for saving the parameter space of spin
+
+signalDuration - duration of signal to be outputted
+type_of_noise - 'gauss' or 'noise'
+
+noise_or_signal - 'noise', 'signal', 'all'
+noise_path - path for saving the noise file
+'''
+
 
 fn = sys.argv[1]
 core.load(fn, file_time = int(sys.argv[2]))
 
-num_sample = int(sys.argv[3])
+n_sample = int(sys.argv[3]) 
 
-mass_lower = int(float(sys.argv[4]))
-mass_upper = int(float(sys.argv[5]))
-mass_sample = int(float(sys.argv[6]))
+m_lower = int(float(sys.argv[4]))
+m_upper = int(float(sys.argv[5]))
+m_sample = int(float(sys.argv[6]))
 
-d_lower = int(float(sys.argv[7]))
-d_upper = int(float(sys.argv[8]))
-d_sample = int(float(sys.argv[9]))
+dist_lower = int(float(sys.argv[7]))
+dist_upper = int(float(sys.argv[8]))
+dist_sample = int(float(sys.argv[9]))
 
-path_wav = sys.argv[10]
-path_detector_data = sys.argv[11]
-path_catalogue = sys.argv[12]
-path_paramSpaceMass = sys.argv[13]
-path_paramSpaceSpin = sys.argv[14]
+dir_wav = sys.argv[10]
+dir_detector_data = sys.argv[11]
+dir_catalogue = sys.argv[12]
+dir_paramSpaceMass = sys.argv[13]
+dir_paramSpaceSpin = sys.argv[14]
 
-signalLen = int(float(sys.argv[15]))
-noiseType = sys.argv[16]
+signalDuration = int(float(sys.argv[15]))
+type_of_noise = sys.argv[16]
 
+noise_or_signal = sys.argv[17]
+noise_path = sys.argv[18]
 
 '''
 Issues:
 
 Add header row to catalogue
-Provide a way for generating Gaussian noise
+Provide a way for generating Gaussian and real noise
 Update README.md with full instructions
 
 '''
@@ -109,17 +142,42 @@ def generate(mass1, mass2, spin1, spin2, dist,
     return event,strain,insert_pos,ret 
 
 
-# define main function
-def main():    
+def generate_and_save_signal(num_sample, mass_lower, mass_upper, 
+                            mass_sample, d_lower, d_upper, d_sample,
+                            path_wav, path_detector_data, path_catalogue,
+                            path_paramSpaceMass, path_paramSpaceSpin,
+                            signalLen, noiseType):    
     '''
-    Main function which calls every other function
+    This generates and saves the noisy whitened/unwhitened signals 
+    along with the actual waveforms, and the catalogue and the parameter space plots.
 
-    Saves the files in the provided destination, and according to all the other specifications.
-    Also saves the catalogue and the parameter space description for the masses and spins.
-    
+
+    Input:
+
+    num_sample - number of ground waveforms and detector data samples to be saved
+    mass_lower - lower bound of masses
+    mass_upper - upper bound of masses
+    mass_samples - sampling rate in the mass space
+
+    d_lower - lower bound of distances
+    d_upper - upper bound of distances
+    d_sample - sampling rate in the distance space
+
+    path_wav - link to saving the ground waveforms
+    path_detector_data - link to saving the detector data
+    path_catalogue - path for saving the catalogue of parameters
+    path_paramSpaceMass - path for saving the parameter space of masses
+    path_paramSpaceSpin - path for saving the parameter space of spin
+
+    signalLen - Length of signal to be saved
+    noiseType - type of noise ('gauss'/'real')
+
+    Output: 
+    Saved waveforms and data from detector, and catalogue, parameter space of masses and spins.
+
     '''
 
-    sl_no = 1
+    sl_no = 0
     catalogue = None
     
     f_low = 25.0
@@ -150,9 +208,9 @@ def main():
                 else: catalogue = np.r_[catalogue,temp]
                 
                 # saving detector data and true strain
-                fn = path_detector_data +'detectorData_' + str(sl_no) + '.csv'       
+                fn = path_detector_data +'detectorData_' + str(sl_no+1) + '.csv'       
                 np.savetxt(fn, event, delimiter=',')
-                fn = path_wav +'trueStrain_' + str(sl_no) + '.csv'       
+                fn = path_wav +'trueStrain_' + str(sl_no+1) + '.csv'       
                 np.savetxt(fn, strain, delimiter=',')
 
                 sl_no += 1
@@ -182,6 +240,81 @@ def main():
     plt.xlabel('chi1z')
     plt.ylabel('chi2z')
     plt.savefig(path_paramSpaceSpin + 'ParamSpaceSpin.jpg')
+
+
+def generate_and_save_noise(noiseType, noiseLen, num_noise, noisePath):
+    '''
+    This function generates and saves the noise according to the 
+    passed arguments
+
+    Input:
+    
+    noiseType - 'real', 'gauss'
+    noiseLen - Length of the signal
+    num_noise - number of noise samples
+    noisePath - path for saving the file
+
+    Output:
+
+    Saved noise files in noisePath   
+    
+    '''
+
+    totalLen = 6 + noiseLen
+
+    for i in range(num_noise):
+
+        start_time = random.randint(0,4096-totalLen) # for Real Noise
+        seed = np.random.randint(10000) # for Gaussian noise
+
+
+        if noiseType == 'real': 
+            noise_ts = core.generate_noise(totalLen, rand = start_time, choice = noiseType) 
+        else:
+            noise_ts = core.generate_noise(totalLen, rand = seed, choice = noiseType)
+
+        h = np.array([0])
+        t = np.array([0])
+        insert_limit = 6*4096 -len(t)
+        insert_pos = random.randint(3*4096,insert_limit)
+        pure_noise,strain = core.combine(h, noise_ts, insert_pos, plot = False, whiten = True, crop = (3,3+noiseLen))
+
+        # Saving the noise as a .csv file
+        pure_noise = pure_noise.reshape(1,noiseLen*4096)
+        np.savetxt(noisePath + 'noise-' + noiseType + '_' + str(i+1) + '.csv', pure_noise, delimiter = ',')
+
+
+def main():
+    '''
+    This is the main function - which calls every other function
+
+    The `noise_or_signal` variable is passed via the args.txt file
+    this can be either 'noise' , 'signal' , 'all'
+
+    '''
+
+    if noise_or_signal == 'noise':
+
+        generate_and_save_noise(type_of_noise, signalDuration, n_sample, noise_path)
+
+    elif noise_or_signal == 'signal':
+
+        generate_and_save_signal(n_sample, m_lower, m_upper, m_sample, dist_lower, dist_upper, 
+                                dist_sample, dir_wav, dir_detector_data, dir_catalogue,
+                                dir_paramSpaceMass, dir_paramSpaceSpin, signalDuration, type_of_noise)
+
+    elif noise_or_signal == 'all':
+
+        generate_and_save_noise(type_of_noise, signalDuration, n_sample, noise_path)
+
+        generate_and_save_signal(n_sample, m_lower, m_upper, m_sample, dist_lower, dist_upper, 
+                                dist_sample, dir_wav, dir_detector_data, dir_catalogue,
+                                dir_paramSpaceMass, dir_paramSpaceSpin, signalDuration, type_of_noise)
+
+    else: 
+
+        print('Bad input - check the `noise_or_signal` variable in args file')
+
 
 if __name__ == "__main__":
     main()

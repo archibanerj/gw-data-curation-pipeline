@@ -222,10 +222,10 @@ def combine(h, noise_ts, insert_pos, plot, whiten, crop):
     strain - actual GW strain
     '''
     event,strain = add(h, noise_ts,insert_pos)
-    if whiten: event = whitening(event) #--------------undo this. This is just for denoising purposes
-    event = event[(crop[0]*4096):(crop[1]*4096)] #---------------make this 2*4096:4*4096
+    if whiten: event = whitening(event) 
+    event = event[(crop[0]*4096):(crop[1]*4096)] 
     strain = strain[(crop[0]*4096):(crop[1]*4096)]
 
     if plot:
         wave_plot(event)
-    return event,strain #returning strain for denoising purposes
+    return event,strain
