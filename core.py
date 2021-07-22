@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from gwpy.timeseries import TimeSeries
-import gwsurrogate
 import pycbc.noise
 from pycbc.waveform import get_td_waveform
 import pycbc.psd
