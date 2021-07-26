@@ -124,7 +124,8 @@ def generate(mass1, mass2, spin1, spin2, dist,
 
     # This limit is introduced so that the insert time + strain length 
     # does not exceed the length of the noise
-    insert_limit = 6*4096 -len(t)
+    ''' Fatal error here. Check this out. '''
+    insert_limit = ((3 + signalDuration)*4096) -len(t)
     insert_pos = random.randint(3*4096,insert_limit)
 
     event,strain = core.combine(h, noise_ts, insert_pos, plot = False, whiten = True, crop = (3,3+signalDuration))
