@@ -7,6 +7,10 @@ from pycbc.waveform import get_td_waveform
 # Importing core script
 import core
 
+''' 
+See this: https://pycbc.org/pycbc/latest/html/filter.html#matched-filter-snr
+'''
+
 '''
 cmd-line arguments: 
 
@@ -37,9 +41,10 @@ noise_or_signal - 'noise', 'signal', 'all'
 noise_path - path for saving the noise file
 '''
 
+flow = 25.0 # Lowest frequency in pycbc waveform
 
 fn = sys.argv[1]
-core.load(fn, file_time = int(sys.argv[2]))
+core.load(fn, file_time = int(sys.argv[2]), flow = flow)
 
 n_sample = int(sys.argv[3]) 
 
@@ -75,7 +80,7 @@ Update README.md with full instructions
 
 def generate(mass1, mass2, spin1, spin2, dist,
             signalDuration, noiseType,
-            f_low = 25, dt = 1.0/4096):
+            dt = 1.0/4096):
 
     '''
     Input: 
@@ -97,13 +102,13 @@ def generate(mass1, mass2, spin1, spin2, dist,
         or seed for Gaussian noise. Depends on noiseType
 
     '''
+    global flow
     h, hc = get_td_waveform(approximant='IMRPhenomD_NRTidalv2',
                                  mass1 = mass1,
                                  mass2 = mass2,
                                  spin1z=spin1, spin2z = spin2,
                                  delta_t=1.0/4096,
-                                 distance=dist,
-                                 f_lower=f_low)
+                                 distance=dist, f_lower = flow)
     t = np.arange(len(h))
     h = np.array(h)
 
@@ -117,7 +122,7 @@ def generate(mass1, mass2, spin1, spin2, dist,
 
     # Generating the noise
     if noiseType == 'real' : 
-        noise_ts = core.generate_noise(noiseDuration, rand = start_time, choice = noiseType) 
+        noise_ts, hp_noise_ts = core.generate_noise(noiseDuration, rand = start_time, choice = noiseType) 
     else :
         noise_ts = core.generate_noise(noiseDuration, rand = seed, choice = noiseType)
 
@@ -128,7 +133,7 @@ def generate(mass1, mass2, spin1, spin2, dist,
     insert_limit = ((3 + signalDuration)*4096) -len(t)
     insert_pos = random.randint(3*4096,insert_limit)
 
-    event,strain = core.combine(h, noise_ts, insert_pos, plot = False, whiten = True, crop = (3,3+signalDuration))
+    event,strain,snr = core.combine(h, noise_ts, hp_noise_ts, flow, insert_pos, plot = False, whiten = True, crop = (3,3+signalDuration), snr_calc = True)
 
     event = event.reshape(1, signalDuration*4096)
     strain = strain.reshape(1, signalDuration*4096)
@@ -140,7 +145,7 @@ def generate(mass1, mass2, spin1, spin2, dist,
     else :
         ret = seed
 
-    return event,strain,insert_pos,ret 
+    return event,strain,insert_pos,ret,snr
 
 
 def generate_and_save_signal(num_sample, mass_lower, mass_upper, 
@@ -200,10 +205,10 @@ def generate_and_save_signal(num_sample, mass_lower, mass_upper,
                 spin1,spin2 = core.random_spin()
 
                 # obtaining the event in the detector and the trua strain
-                event, strain, insert_pos, start_time = generate(m1, m2, spin1[2], spin2[2], d, signalLen, noiseType)
+                event, strain, insert_pos, start_time, snr = generate(m1, m2, spin1[2], spin2[2], d, signalLen, noiseType)
 
                 # updating catalogue
-                temp = np.array([sl_no, start_time, insert_pos, m1, m2, d, spin1[2], spin2[2]]) #this is for real noises
+                temp = np.array([sl_no, start_time, insert_pos, m1, m2, d, spin1[2], spin2[2], snr]) #this is for real noises
                 temp = np.reshape(temp,(1,len(temp)))                
                 if catalogue is None: catalogue = temp 
                 else: catalogue = np.r_[catalogue,temp]
@@ -260,6 +265,7 @@ def generate_and_save_noise(noiseType, noiseLen, num_noise, noisePath):
     Saved noise files in noisePath   
     
     '''
+    global flow
 
     totalLen = 6 + noiseLen
 
@@ -270,7 +276,7 @@ def generate_and_save_noise(noiseType, noiseLen, num_noise, noisePath):
 
 
         if noiseType == 'real': 
-            noise_ts = core.generate_noise(totalLen, rand = start_time, choice = noiseType) 
+            noise_ts, hp_noise_ts = core.generate_noise(totalLen, rand = start_time, choice = noiseType) 
         else:
             noise_ts = core.generate_noise(totalLen, rand = seed, choice = noiseType)
 
@@ -278,7 +284,7 @@ def generate_and_save_noise(noiseType, noiseLen, num_noise, noisePath):
         t = np.array([0])
         insert_limit = 6*4096 -len(t)
         insert_pos = random.randint(3*4096,insert_limit)
-        pure_noise,strain = core.combine(h, noise_ts, insert_pos, plot = False, whiten = True, crop = (3,3+noiseLen))
+        pure_noise,strain,snr = core.combine(h, noise_ts, hp_noise_ts, flow, insert_pos, plot = False, whiten = True, crop = (3,3+noiseLen), snr_calc = False)
 
         # Saving the noise as a .csv file
         pure_noise = pure_noise.reshape(1,noiseLen*4096)

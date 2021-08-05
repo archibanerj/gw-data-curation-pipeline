@@ -7,15 +7,16 @@ import pycbc.psd
 import pylab
 import pandas as pd
 import random 
+import pycbc
 
 #For whitening the data
 from pycbc.filter import highpass_fir, lowpass_fir
 from pycbc.waveform import get_fd_waveform
 from pycbc.psd import welch, interpolate
 
-time_series_noise, t0 = None, None
+high_passed_noise, time_series_noise, t0 = None, None, None
 
-def load(path, file_time):
+def load(path, file_time, flow):
     '''
     ONLY to be used if choice of noise is real LIGO noise
     format - ONLY hdf5 files allowed till now
@@ -24,7 +25,9 @@ def load(path, file_time):
 
     global time_series_noise
     global t0
+    global high_passed_noise
     time_series_noise = TimeSeries.read(path,format = 'hdf5.losc') 
+    high_passed_noise = time_series_noise.highpass(flow)
     t0 = file_time
 
 def real_noise(start_time, length): #t0 = 1239085056 - original .hdf5 file, t0 = 1184567296 for .gwf file
@@ -39,12 +42,18 @@ def real_noise(start_time, length): #t0 = 1239085056 - original .hdf5 file, t0 =
     Returns real LIGO noise according to input parameters in a numpy array
     """   
 
+    # Original Noise
     noise_ts = time_series_noise.crop(t0+start_time, t0+start_time+length)
     
     time_domain = np.array(noise_ts.times) - t0 - start_time
     noise_ts = np.array(noise_ts)
+
+    # highpasses noise
+    hp_noise_ts = high_passed_noise.crop(t0+start_time, t0+start_time+length)
     
-    return noise_ts 
+    hp_noise_ts = np.array(hp_noise_ts)
+    
+    return noise_ts, hp_noise_ts
 
 def gauss_noise(seed, timeInterval, flow=6.0, delta_f=1.0/16):
     """
@@ -202,7 +211,7 @@ def wave_plot(time_series , continue_plot):
         plt.ylabel('Strain')
         plt.show()
     
-def combine(h, noise_ts, insert_pos, plot, whiten, crop):
+def combine(h, noise_ts, hp_noise_ts, flow, insert_pos, plot, whiten, crop, snr_calc):
     '''
     For combining waveform with noise, whitening it and finally cropping it
     
@@ -219,12 +228,32 @@ def combine(h, noise_ts, insert_pos, plot, whiten, crop):
 
     event - detector data 
     strain - actual GW strain
+    snr - Signal to noise ratio
     '''
-    event,strain = add(h, noise_ts,insert_pos)
+    event,strain = add(h, noise_ts, insert_pos)
+
+    if snr_calc is True:
+        # Finding SNR here
+        hp_noise_ts = pycbc.types.timeseries.TimeSeries(initial_array = hp_noise_ts, delta_t = 1/4096)
+        pycbc_h = pycbc.types.timeseries.TimeSeries(initial_array = h, delta_t = 1/4096)
+        hp_event, strain_dis = add(h, np.array(hp_noise_ts), insert_pos)
+        hp_event = pycbc.types.timeseries.TimeSeries(initial_array = hp_event, delta_t = 1/4096)
+        stilde = hp_event.to_frequencyseries()
+        freq_h = pycbc_h.to_frequencyseries(delta_f = stilde.delta_f)
+        freq_h.resize(len(stilde))
+        psd = interpolate(welch(hp_noise_ts, seg_len=2048, seg_stride=1024), delta_f = stilde.delta_f)
+        snr = pycbc.filter.matched_filter(freq_h, stilde, psd=psd,
+                                        low_frequency_cutoff=flow)
+        snr = np.max(np.array(abs(snr)))
+
+        del hp_noise_ts, pycbc_h, hp_event, stilde, freq_h, psd
+    else:
+        snr = 0
+
     if whiten: event = whitening(event) 
     event = event[(crop[0]*4096):(crop[1]*4096)] 
     strain = strain[(crop[0]*4096):(crop[1]*4096)]
 
     if plot:
         wave_plot(event)
-    return event,strain
+    return event,strain,snr
