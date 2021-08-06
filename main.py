@@ -1,8 +1,11 @@
+from operator import index
 import sys
 import numpy as np
 import random 
 import matplotlib.pyplot as plt
+from pandas.io.parsers import count_empty_vals
 from pycbc.waveform import get_td_waveform
+import pandas as pd
 
 # Importing core script
 import core
@@ -72,7 +75,6 @@ noise_path = sys.argv[18]
 Issues:
 
 Add header row to catalogue
-Provide a way for generating Gaussian and real noise
 Update README.md with full instructions
 
 '''
@@ -100,6 +102,7 @@ def generate(mass1, mass2, spin1, spin2, dist,
     insert_pos - index at which event can be inserted 
     ret - either start_time (time from which noise is cropped from the original noise file),
         or seed for Gaussian noise. Depends on noiseType
+    snr - Signal to noise ratio
 
     '''
     global flow
@@ -118,7 +121,7 @@ def generate(mass1, mass2, spin1, spin2, dist,
     seed = np.random.randint(10000) # for Gaussian noise
 
     if len(t) * dt > 0.75 * signalDuration:
-        t,h = core.truncate(t,h,signalDuration)
+        t,h = core.truncate(t,h,signalDuration) # check correctness
 
     # Generating the noise
     if noiseType == 'real' : 
@@ -129,7 +132,6 @@ def generate(mass1, mass2, spin1, spin2, dist,
 
     # This limit is introduced so that the insert time + strain length 
     # does not exceed the length of the noise
-    ''' Fatal error here. Check this out. '''
     insert_limit = ((3 + signalDuration)*4096) -len(t)
     insert_pos = random.randint(3*4096,insert_limit)
 
@@ -229,7 +231,9 @@ def generate_and_save_signal(num_sample, mass_lower, mass_upper,
             break
 
     # saving catalogue
-    np.savetxt(path_catalogue + 'catalogue.csv', catalogue, fmt = '%.1f', delimiter = ',')
+    df_cata = pd.DataFrame(catalogue, columns = ['serial','sampled from LIGO','waveform insertion position','mass1','mass2','distance','spin1z','spin2z','SNR'])
+    #np.savetxt(path_catalogue + 'catalogue.csv', catalogue, fmt = '%.1f', delimiter = ',')
+    df_cata.to_csv(path_catalogue + 'catalogue.csv',sep = ',',header=True, index = False)
     
     # Save Parameter Space for Mass
     plt.scatter(M2,M1)

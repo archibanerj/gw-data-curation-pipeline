@@ -26,8 +26,8 @@ def load(path, file_time, flow):
     global time_series_noise
     global t0
     global high_passed_noise
-    time_series_noise = TimeSeries.read(path,format = 'hdf5.losc') 
-    high_passed_noise = time_series_noise.highpass(flow)
+    time_series_noise = TimeSeries.read(path,format = 'hdf5.losc') # original LIGO noise
+    high_passed_noise = time_series_noise.highpass(flow) # high passed noise
     t0 = file_time
 
 def real_noise(start_time, length): #t0 = 1239085056 - original .hdf5 file, t0 = 1184567296 for .gwf file
@@ -124,7 +124,7 @@ def truncate(time_domain, time_series, desiredLength, dt = 1/4096):
     cropped_ts = time_series
     cropped_td = time_domain
     if time_interval > 0.75 * desiredLength: 
-        crop_pos = len(time_series) - int((0.75/dt) * desiredLength) - 1 # change this 3 if necessary
+        crop_pos = len(time_series) - int((0.75/dt) * desiredLength) - 1 
         cropped_ts = time_series[crop_pos:len(time_series)]
         cropped_td = time_domain[crop_pos:len(time_domain)] # - time_domain[0]
     return cropped_td, cropped_ts
@@ -219,6 +219,8 @@ def combine(h, noise_ts, hp_noise_ts, flow, insert_pos, plot, whiten, crop, snr_
 
     h - input time series
     noise_ts - additive noise time series
+    hp_noise_ts - high passed noise at flow
+    flow - Lower cutoff frequency being used
     insert_pos - position at which the time series is inserted in noise_ts
     plot - True/False whether to plot the combined waveform or not
     whiten - True/False whether to whiten the waveform or not
