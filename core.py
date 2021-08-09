@@ -21,6 +21,7 @@ def load(path, file_time, flow):
     ONLY to be used if choice of noise is real LIGO noise
     format - ONLY hdf5 files allowed till now
     file_time :: starting GPS time of the file    
+    flow :: lowest frequency appearing in the true waveform
     '''
 
     global time_series_noise
@@ -145,7 +146,7 @@ def whitening(l1,detector='L1'):
     white_strainl1 = (l1.to_frequencyseries() / (psd ** 0.5)).to_timeseries()
 
         # remove some of the high and low
-    smoothl1 = highpass_fir(white_strainl1, 35, 8)
+    smoothl1 = highpass_fir(white_strainl1, 35, 8) # Doubt here - shouldn't this correspond to f_low? Otherwise wont it wipe out information about the signal itself?
     smoothl1 = lowpass_fir(white_strainl1, 300, 8)
 
         # time shift and flip L1
@@ -236,14 +237,20 @@ def combine(h, noise_ts, hp_noise_ts, flow, insert_pos, plot, whiten, crop, snr_
 
     if snr_calc is True:
         # Finding SNR here
+        # any need to play with the frequencies here?
+        # Generating high passed event
         hp_noise_ts = pycbc.types.timeseries.TimeSeries(initial_array = hp_noise_ts, delta_t = 1/4096)
         pycbc_h = pycbc.types.timeseries.TimeSeries(initial_array = h, delta_t = 1/4096)
-        hp_event, strain_dis = add(h, np.array(hp_noise_ts), insert_pos)
+        hp_event, strain_dis = add(h, np.array(hp_noise_ts), insert_pos) # discard strain_dis(card)
         hp_event = pycbc.types.timeseries.TimeSeries(initial_array = hp_event, delta_t = 1/4096)
-        stilde = hp_event.to_frequencyseries()
-        freq_h = pycbc_h.to_frequencyseries(delta_f = stilde.delta_f)
+
+        #Converting everything into frequency series (do we need to convert hp_event to freq series?)
+        stilde = hp_event.to_frequencyseries(delta_f = 1/hp_event.duration)
+        freq_h = pycbc_h.to_frequencyseries(delta_f = 1/hp_event.duration)
         freq_h.resize(len(stilde))
-        psd = interpolate(welch(hp_noise_ts, seg_len=2048, seg_stride=1024), delta_f = stilde.delta_f)
+
+        # Generating psd and finding SNR
+        psd = interpolate(welch(hp_event), delta_f = stilde.delta_f) 
         snr = pycbc.filter.matched_filter(freq_h, stilde, psd=psd,
                                         low_frequency_cutoff=flow)
         snr = np.max(np.array(abs(snr)))
